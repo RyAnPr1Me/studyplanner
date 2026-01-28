@@ -55,6 +55,13 @@ npm run dev
 npm run electron:dev
 ```
 
+### Backend Only
+
+```bash
+cd backend
+cargo run
+```
+
 ### Configuration
 
 Create a `.env` file in the `backend/` directory:
