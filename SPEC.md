@@ -494,10 +494,12 @@ Response:
 ```
 POST /api/reminders/create
 
+Note: user_id is derived from authenticated session, not from request body.
+Validates that reminder_time is in the future and task belongs to user.
+
 Request:
 {
   "task_id": "uuid",
-  "user_id": "uuid",
   "reminder_time": "2026-02-01T08:30:00Z",
   "message": "Start studying Calculus - Derivatives",
   "notification_type": "system"
@@ -515,7 +517,13 @@ Response:
 
 **15. Get Reminders**
 ```
-GET /api/reminders?user_id={uuid}&status={status}
+GET /api/reminders?user_id={uuid}&status={status}&from_date={date}&to_date={date}
+
+Query Parameters:
+- user_id (required): User UUID
+- status (optional): Filter by status (pending|sent|dismissed)
+- from_date (optional): Start date for filtering (YYYY-MM-DD)
+- to_date (optional): End date for filtering (YYYY-MM-DD)
 
 Response:
 {
@@ -558,6 +566,9 @@ Response:
 ```
 PATCH /api/reminders/{reminder_id}
 
+Note: Verifies reminder belongs to authenticated user.
+Valid transitions: pending→dismissed, sent→dismissed
+
 Request:
 {
   "status": "dismissed"
@@ -571,7 +582,20 @@ Response:
 }
 ```
 
-**18. Get Overdue Tasks**
+**18. Delete Reminder**
+```
+DELETE /api/reminders/{reminder_id}
+
+Note: Verifies reminder belongs to authenticated user before deletion.
+
+Response:
+{
+  "success": true,
+  "message": "Reminder deleted successfully"
+}
+```
+
+**19. Get Overdue Tasks**
 ```
 GET /api/tasks/overdue?user_id={uuid}
 
@@ -929,7 +953,7 @@ CREATE TABLE reminders (
     reminder_time TIMESTAMP NOT NULL,
     message TEXT NOT NULL,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'dismissed')),
-    notification_type TEXT CHECK(notification_type IN ('system', 'email', 'both')),
+    notification_type TEXT DEFAULT 'system' CHECK(notification_type IN ('system', 'email', 'both')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
@@ -1332,14 +1356,27 @@ pub struct ReminderService {
 
 impl ReminderService {
     // Check for pending reminders every minute
-    pub async fn run_scheduler(&self) {
+    pub async fn run_scheduler(&self) -> Result<()> {
         loop {
             let now = Utc::now();
-            let pending = self.get_pending_reminders(now).await?;
             
-            for reminder in pending {
-                self.send_notification(&reminder).await?;
-                self.mark_as_sent(reminder.id).await?;
+            // Handle errors gracefully to keep scheduler running
+            match self.get_pending_reminders(now).await {
+                Ok(pending) => {
+                    for reminder in pending {
+                        // Process each reminder independently
+                        if let Err(e) = self.send_notification(&reminder).await {
+                            eprintln!("Failed to send reminder {}: {}", reminder.id, e);
+                            continue;
+                        }
+                        if let Err(e) = self.mark_as_sent(reminder.id).await {
+                            eprintln!("Failed to mark reminder {} as sent: {}", reminder.id, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error fetching pending reminders: {}", e);
+                }
             }
             
             sleep(Duration::from_secs(60)).await;
@@ -1349,13 +1386,16 @@ impl ReminderService {
     // Create automatic reminders for new tasks
     pub async fn create_auto_reminders(&self, task: &Task) -> Result<Vec<Reminder>> {
         if let Some(due_date) = task.due_date {
+            // Convert NaiveDate to NaiveDateTime for time arithmetic
+            let due_datetime = due_date.and_hms_opt(9, 0, 0).unwrap(); // Default to 9 AM
+            
             let reminders = match task.priority {
                 Priority::High => vec![
-                    self.create_reminder(task, due_date - Duration::days(1))?,
-                    self.create_reminder(task, due_date - Duration::hours(1))?,
+                    self.create_reminder(task, due_datetime - chrono::Duration::days(1))?,
+                    self.create_reminder(task, due_datetime - chrono::Duration::hours(1))?,
                 ],
                 Priority::Medium | Priority::Low => vec![
-                    self.create_reminder(task, due_date - Duration::days(1))?,
+                    self.create_reminder(task, due_datetime - chrono::Duration::days(1))?,
                 ],
             };
             
@@ -1367,9 +1407,13 @@ impl ReminderService {
     
     // Get overdue tasks
     pub async fn get_overdue_tasks(&self, user_id: &str) -> Result<Vec<Task>> {
-        let now = Utc::now().date();
-        self.db.get_tasks_before_date(user_id, now).await
+        let now = Local::now().date_naive();
+        let all_tasks = self.db.get_tasks_before_date(user_id, now).await?;
+        
+        // Filter for non-completed tasks
+        Ok(all_tasks.into_iter()
             .filter(|t| t.status != TaskStatus::Completed)
+            .collect())
     }
 }
 ```
@@ -1398,7 +1442,7 @@ pub struct Task {
 // Track days until due
 pub fn days_until_due(&self) -> Option<i64> {
     self.due_date.map(|due| {
-        let now = Utc::now().date().naive_utc();
+        let now = Local::now().date_naive();
         (due - now).num_days()
     })
 }
@@ -1410,7 +1454,7 @@ pub fn is_overdue(&self) -> bool {
     }
     
     self.due_date.map_or(false, |due| {
-        let now = Utc::now().date().naive_utc();
+        let now = Local::now().date_naive();
         due < now
     })
 }
@@ -1460,15 +1504,19 @@ interface TaskCardProps {
 import { Notification } from 'electron';
 
 function showReminder(reminder: Reminder) {
-  new Notification({
+  const notification = new Notification({
     title: `Reminder: ${reminder.task_subject}`,
     body: reminder.message,
-    urgency: 'normal',
-    actions: [
-      { type: 'button', text: 'View Task' },
-      { type: 'button', text: 'Dismiss' }
-    ]
-  }).show();
+    icon: path.join(__dirname, 'assets/reminder-icon.png'),
+    sound: 'default'
+  });
+  
+  notification.on('click', () => {
+    // Navigate to task when notification is clicked
+    mainWindow.webContents.send('navigate-to-task', reminder.task_id);
+  });
+  
+  notification.show();
 }
 ```
 

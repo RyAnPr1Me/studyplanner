@@ -367,11 +367,17 @@ Get user statistics.
 #### POST /api/reminders/create
 Create a reminder for a task.
 
+**Authentication Required**: User ID is derived from authenticated session.
+
+**Validation**: 
+- `reminder_time` must be in the future
+- `task_id` must exist and belong to authenticated user
+- User authorization verified before creation
+
 **Request:**
 ```json
 {
   "task_id": "uuid",
-  "user_id": "uuid",
   "reminder_time": "2026-02-01T08:30:00Z",
   "message": "Start studying Calculus - Derivatives",
   "notification_type": "system"
@@ -443,6 +449,13 @@ Get upcoming reminders for the user.
 #### PATCH /api/reminders/{reminder_id}
 Update reminder status.
 
+**Authentication Required**: Verifies reminder belongs to authenticated user.
+
+**Valid Status Transitions**:
+- `pending` → `dismissed` (user dismisses before sent)
+- `sent` → `dismissed` (user dismisses after notification)
+- Invalid: Cannot change back to `pending` once `sent`
+
 **Request:**
 ```json
 {
@@ -461,6 +474,8 @@ Update reminder status.
 
 #### DELETE /api/reminders/{reminder_id}
 Delete a reminder.
+
+**Authentication Required**: Verifies reminder belongs to authenticated user before deletion.
 
 **Response:** `200 OK`
 ```json
