@@ -179,6 +179,14 @@ backend/
 
 ### API Endpoints
 
+**Note**: For simplicity in this specification, API response examples show the direct data structure. In production implementation, all successful responses should be wrapped in a standard envelope format as documented in API.md:
+```json
+{
+  "data": { /* actual response data */ },
+  "timestamp": "2026-01-28T19:04:00Z"
+}
+```
+
 #### Study Plans
 
 **1. Generate Weekly Plan**
@@ -943,10 +951,6 @@ const ToolRenderer: React.FC<ToolRendererProps> = ({ code, toolId }) => {
 import React, { useState } from 'react';
 import { Box, TextField, Button, Typography, Paper } from '@mui/material';
 
-interface CalculatorProps {
-  // AI fills in specific calculator logic
-}
-
 const QuadraticCalculator: React.FC = () => {
   const [a, setA] = useState('');
   const [b, setB] = useState('');
@@ -954,13 +958,28 @@ const QuadraticCalculator: React.FC = () => {
   const [solution, setSolution] = useState<string | null>(null);
   
   const solve = () => {
-    // AI-generated solving logic
-    const discriminant = Math.pow(+b, 2) - 4 * (+a) * (+c);
+    // AI-generated solving logic with validation
+    const numA = parseFloat(a);
+    const numB = parseFloat(b);
+    const numC = parseFloat(c);
+    
+    // Validate inputs
+    if (isNaN(numA) || isNaN(numB) || isNaN(numC)) {
+      setSolution('Please enter valid numbers');
+      return;
+    }
+    
+    if (numA === 0) {
+      setSolution('Coefficient "a" cannot be zero for quadratic equation');
+      return;
+    }
+    
+    const discriminant = Math.pow(numB, 2) - 4 * numA * numC;
     if (discriminant < 0) {
       setSolution('No real solutions');
     } else {
-      const x1 = (-b + Math.sqrt(discriminant)) / (2 * a);
-      const x2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+      const x1 = (-numB + Math.sqrt(discriminant)) / (2 * numA);
+      const x2 = (-numB - Math.sqrt(discriminant)) / (2 * numA);
       setSolution(`x₁ = ${x1.toFixed(2)}, x₂ = ${x2.toFixed(2)}`);
     }
   };
@@ -995,7 +1014,8 @@ import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography, LinearProgress } from '@mui/material';
 
 const PomodoroTimer: React.FC = () => {
-  const [seconds, setSeconds] = useState(1500); // 25 minutes
+  const INITIAL_DURATION = 1500; // 25 minutes
+  const [seconds, setSeconds] = useState(INITIAL_DURATION);
   const [isActive, setIsActive] = useState(false);
   
   useEffect(() => {
@@ -1013,7 +1033,7 @@ const PomodoroTimer: React.FC = () => {
     };
   }, [isActive, seconds]);
   
-  const progress = ((1500 - seconds) / 1500) * 100;
+  const progress = ((INITIAL_DURATION - seconds) / INITIAL_DURATION) * 100;
   
   return (
     <Box sx={{ textAlign: 'center', p: 3 }}>
@@ -1641,7 +1661,7 @@ autoUpdater.on('update-downloaded', () => {
    ```rust
    // Validate all user inputs
    fn validate_plan_request(req: &PlanRequest) -> Result<()> {
-       if req.study_hours_per_day > 24 {
+       if req.study_hours_per_day < 1 || req.study_hours_per_day > 12 {
            return Err(ValidationError::InvalidHours);
        }
        // ... more validations
