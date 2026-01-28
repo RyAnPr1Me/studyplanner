@@ -68,6 +68,7 @@ Generate a new weekly study plan with AI.
             "topic": "Calculus - Derivatives",
             "duration_minutes": 90,
             "start_time": "09:00",
+            "due_date": "2026-02-03",
             "priority": "high",
             "resources": ["Textbook Ch. 4", "Practice Set 1"],
             "ai_notes": "Focus on chain rule applications"
@@ -358,6 +359,138 @@ Get user statistics.
     {"date": "2026-01-22", "hours": 4.5},
     {"date": "2026-01-23", "hours": 3.0}
   ]
+}
+```
+
+### Reminders
+
+#### POST /api/reminders/create
+Create a reminder for a task.
+
+**Request:**
+```json
+{
+  "task_id": "uuid",
+  "user_id": "uuid",
+  "reminder_time": "2026-02-01T08:30:00Z",
+  "message": "Start studying Calculus - Derivatives",
+  "notification_type": "system"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "reminder_id": "uuid",
+  "task_id": "uuid",
+  "reminder_time": "2026-02-01T08:30:00Z",
+  "status": "pending",
+  "created_at": "2026-01-28T19:04:00Z"
+}
+```
+
+#### GET /api/reminders
+Get user's reminders.
+
+**Query Parameters:**
+- `user_id` (required): User UUID
+- `status` (optional): Filter by status (pending|sent|dismissed)
+- `from_date` (optional): Start date for filtering (YYYY-MM-DD)
+- `to_date` (optional): End date for filtering (YYYY-MM-DD)
+
+**Response:** `200 OK`
+```json
+{
+  "reminders": [
+    {
+      "reminder_id": "uuid",
+      "task_id": "uuid",
+      "task_subject": "Mathematics",
+      "task_topic": "Calculus - Derivatives",
+      "reminder_time": "2026-02-01T08:30:00Z",
+      "message": "Start studying Calculus - Derivatives",
+      "status": "pending",
+      "notification_type": "system"
+    }
+  ],
+  "total": 5
+}
+```
+
+#### GET /api/reminders/upcoming
+Get upcoming reminders for the user.
+
+**Query Parameters:**
+- `user_id` (required): User UUID
+- `hours` (optional): Number of hours to look ahead (default: 24)
+
+**Response:** `200 OK`
+```json
+{
+  "upcoming_reminders": [
+    {
+      "reminder_id": "uuid",
+      "task_id": "uuid",
+      "task_subject": "Mathematics",
+      "reminder_time": "2026-02-01T08:30:00Z",
+      "message": "Start studying Calculus - Derivatives",
+      "time_until": "30 minutes"
+    }
+  ]
+}
+```
+
+#### PATCH /api/reminders/{reminder_id}
+Update reminder status.
+
+**Request:**
+```json
+{
+  "status": "dismissed"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "reminder_id": "uuid",
+  "status": "dismissed",
+  "updated_at": "2026-02-01T08:00:00Z"
+}
+```
+
+#### DELETE /api/reminders/{reminder_id}
+Delete a reminder.
+
+**Response:** `200 OK`
+```json
+{
+  "success": true,
+  "message": "Reminder deleted successfully"
+}
+```
+
+#### GET /api/tasks/overdue
+Get overdue tasks based on due dates.
+
+**Query Parameters:**
+- `user_id` (required): User UUID
+
+**Response:** `200 OK`
+```json
+{
+  "overdue_tasks": [
+    {
+      "task_id": "uuid",
+      "subject": "Physics",
+      "topic": "Newton's Laws",
+      "due_date": "2026-01-27",
+      "days_overdue": 1,
+      "priority": "high",
+      "status": "pending"
+    }
+  ],
+  "total_overdue": 3
 }
 ```
 

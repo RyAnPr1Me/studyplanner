@@ -60,14 +60,18 @@
 │  │  ├─ /plans     │  ├─ CORS        │  ├─ AI Service              │ │
 │  │  ├─ /tools     │  ├─ Auth        │  │  ├─ OpenAI Client        │ │
 │  │  ├─ /ai        │  ├─ Logging     │  │  ├─ Prompt Builder       │ │
-│  │  └─ /users     │  └─ Error       │  │  └─ Response Parser      │ │
-│  │                │                 │  ├─ Plan Service            │ │
+│  │  ├─ /reminders │  └─ Error       │  │  └─ Response Parser      │ │
+│  │  └─ /users     │                 │  ├─ Plan Service            │ │
 │  │                │                 │  │  ├─ Weekly Generator     │ │
 │  │                │                 │  │  └─ Daily Breakdown       │ │
-│  │                │                 │  └─ Tool Service            │ │
-│  │                │                 │     ├─ Code Generator       │ │
-│  │                │                 │     ├─ Code Validator       │ │
-│  │                │                 │     └─ Version Manager      │ │
+│  │                │                 │  ├─ Tool Service            │ │
+│  │                │                 │  │  ├─ Code Generator       │ │
+│  │                │                 │  │  ├─ Code Validator       │ │
+│  │                │                 │  │  └─ Version Manager      │ │
+│  │                │                 │  └─ Reminder Service        │ │
+│  │                │                 │     ├─ Notification Manager │ │
+│  │                │                 │     ├─ Scheduler            │ │
+│  │                │                 │     └─ Overdue Tracker      │ │
 │  └────────────────┴─────────────────┴──────────────────────────────┘ │
 │                                    ↕                                   │
 │  ┌──────────────────────────────────────────────────────────────────┐ │
@@ -77,7 +81,8 @@
 │  │  │  ├─ PlanRepo   │  ├─ Plan         │  └─ init.sql            ││ │
 │  │  │  ├─ ToolRepo   │  ├─ Tool         │                         ││ │
 │  │  │  ├─ UserRepo   │  ├─ User         │                         ││ │
-│  │  │  └─ AIRepo     │  └─ Conversation │                         ││ │
+│  │  │  ├─ AIRepo     │  ├─ Conversation │                         ││ │
+│  │  │  └─ ReminderRepo│ └─ Reminder     │                         ││ │
 │  │  └────────────────┴──────────────────┴─────────────────────────┘│ │
 │  └──────────────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────────┘
@@ -89,6 +94,7 @@
         │  ├─ study_plans       │      │  └─ cache/             │
         │  ├─ tasks             │      └────────────────────────┘
         │  ├─ tools             │
+        │  ├─ reminders         │
         │  ├─ ai_conversations  │
         │  └─ user_stats        │
         └───────────────────────┘
@@ -465,3 +471,124 @@ Electron Builder
    - Process isolation
    - Memory management
    - Native module optimization
+
+## Reminder and Due Date Tracking Data Flow
+
+### Task Creation with Due Date
+
+```
+┌──────────────┐
+│   Frontend   │
+│  Task Form   │
+└──────┬───────┘
+       │ POST /api/plans/generate
+       │ (with subjects & goals)
+       ↓
+┌──────────────────────────────┐
+│  Backend: Plan Service       │
+│  ├─ Parse user goals         │
+│  ├─ AI generates tasks       │
+│  └─ Extracts due dates       │
+└──────┬───────────────────────┘
+       │
+       ↓
+┌──────────────────────────────┐
+│  Task Repository             │
+│  ├─ Save task with due_date  │
+│  └─ Return task_id           │
+└──────┬───────────────────────┘
+       │
+       ↓
+┌──────────────────────────────┐
+│  Reminder Service            │
+│  ├─ Check if due_date exists │
+│  ├─ Create auto-reminders    │
+│  │  (1 day before, 1hr before)│
+│  └─ Save to reminders table  │
+└──────┬───────────────────────┘
+       │
+       ↓
+┌──────────────────────────────┐
+│  Frontend                    │
+│  ├─ Display task with due    │
+│  ├─ Show reminder badge      │
+│  └─ Color-code by urgency    │
+└──────────────────────────────┘
+```
+
+### Reminder Notification Flow
+
+```
+┌──────────────────────────────┐
+│  Background Scheduler        │
+│  (runs every minute)         │
+│  ├─ Query pending reminders  │
+│  └─ Filter by reminder_time  │
+└──────┬───────────────────────┘
+       │ Reminders due now
+       ↓
+┌──────────────────────────────┐
+│  Reminder Service            │
+│  ├─ Get task details         │
+│  ├─ Format notification msg  │
+│  └─ Send to notification mgr │
+└──────┬───────────────────────┘
+       │
+       ↓
+┌──────────────────────────────┐
+│  Notification Manager        │
+│  ├─ Check notification_type  │
+│  ├─ Send system notification │
+│  └─ (Optional) Send email    │
+└──────┬───────────────────────┘
+       │
+       ↓
+┌──────────────────────────────┐
+│  Electron Main Process       │
+│  ├─ Display desktop notif.   │
+│  ├─ Play sound (optional)    │
+│  └─ Handle user actions      │
+└──────┬───────────────────────┘
+       │ User clicks notification
+       ↓
+┌──────────────────────────────┐
+│  Frontend                    │
+│  ├─ Navigate to task         │
+│  └─ Update reminder status   │
+└──────────────────────────────┘
+```
+
+### Overdue Task Tracking
+
+```
+┌──────────────────────────────┐
+│  User Opens Dashboard        │
+└──────┬───────────────────────┘
+       │ GET /api/tasks/overdue
+       ↓
+┌──────────────────────────────┐
+│  Backend: Task Service       │
+│  ├─ Get current date         │
+│  ├─ Query tasks with:        │
+│  │  • due_date < today       │
+│  │  • status != completed    │
+│  └─ Calculate days_overdue   │
+└──────┬───────────────────────┘
+       │
+       ↓
+┌──────────────────────────────┐
+│  Frontend                    │
+│  ├─ Display overdue banner   │
+│  ├─ Show in sidebar widget   │
+│  ├─ Highlight in task list   │
+│  └─ Offer quick reschedule   │
+└──────────────────────────────┘
+```
+
+### Key Integration Points
+
+1. **Plan Generation**: AI analyzes user goals to suggest due dates
+2. **Task CRUD**: Due date updates trigger reminder rescheduling
+3. **Notification System**: Integrates with Electron for desktop alerts
+4. **Dashboard**: Shows overdue count and upcoming reminders
+5. **Task Cards**: Display due date status with color coding

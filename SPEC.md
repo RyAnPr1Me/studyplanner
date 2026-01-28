@@ -147,17 +147,20 @@ backend/
 │   │   ├── plans.rs         # Study plan endpoints
 │   │   ├── tools.rs         # Dynamic tool endpoints
 │   │   ├── ai.rs            # AI interaction endpoints
-│   │   └── users.rs         # User management endpoints
+│   │   ├── users.rs         # User management endpoints
+│   │   └── reminders.rs     # Reminder management endpoints
 │   ├── models/
 │   │   ├── mod.rs
 │   │   ├── plan.rs          # Study plan models
 │   │   ├── tool.rs          # Tool models
-│   │   └── user.rs          # User models
+│   │   ├── user.rs          # User models
+│   │   └── reminder.rs      # Reminder models
 │   ├── services/
 │   │   ├── mod.rs
 │   │   ├── ai_service.rs    # AI provider integration
 │   │   ├── plan_service.rs  # Plan generation logic
-│   │   └── tool_service.rs  # Tool generation/execution
+│   │   ├── tool_service.rs  # Tool generation/execution
+│   │   └── reminder_service.rs  # Reminder scheduling and notifications
 │   ├── db/
 │   │   ├── mod.rs
 │   │   ├── schema.rs        # Database schema
@@ -222,6 +225,7 @@ Response:
             "topic": "Calculus - Derivatives",
             "duration_minutes": 90,
             "start_time": "09:00",
+            "due_date": "2026-02-03",
             "priority": "high",
             "resources": ["Chapter 4", "Practice problems 1-15"],
             "ai_notes": "Focus on chain rule and product rule"
@@ -481,6 +485,110 @@ Response:
     "Mathematics": 75,
     "Physics": 60
   }
+}
+```
+
+#### Reminders
+
+**14. Create Reminder**
+```
+POST /api/reminders/create
+
+Request:
+{
+  "task_id": "uuid",
+  "user_id": "uuid",
+  "reminder_time": "2026-02-01T08:30:00Z",
+  "message": "Start studying Calculus - Derivatives",
+  "notification_type": "system"
+}
+
+Response:
+{
+  "reminder_id": "uuid",
+  "task_id": "uuid",
+  "reminder_time": "2026-02-01T08:30:00Z",
+  "status": "pending",
+  "created_at": "2026-01-28T19:04:00Z"
+}
+```
+
+**15. Get Reminders**
+```
+GET /api/reminders?user_id={uuid}&status={status}
+
+Response:
+{
+  "reminders": [
+    {
+      "reminder_id": "uuid",
+      "task_id": "uuid",
+      "task_subject": "Mathematics",
+      "task_topic": "Calculus - Derivatives",
+      "reminder_time": "2026-02-01T08:30:00Z",
+      "message": "Start studying Calculus - Derivatives",
+      "status": "pending",
+      "notification_type": "system"
+    }
+  ],
+  "total": 5
+}
+```
+
+**16. Get Upcoming Reminders**
+```
+GET /api/reminders/upcoming?user_id={uuid}&hours={n}
+
+Response:
+{
+  "upcoming_reminders": [
+    {
+      "reminder_id": "uuid",
+      "task_id": "uuid",
+      "task_subject": "Mathematics",
+      "reminder_time": "2026-02-01T08:30:00Z",
+      "message": "Start studying Calculus - Derivatives",
+      "time_until": "30 minutes"
+    }
+  ]
+}
+```
+
+**17. Update Reminder Status**
+```
+PATCH /api/reminders/{reminder_id}
+
+Request:
+{
+  "status": "dismissed"
+}
+
+Response:
+{
+  "reminder_id": "uuid",
+  "status": "dismissed",
+  "updated_at": "2026-02-01T08:00:00Z"
+}
+```
+
+**18. Get Overdue Tasks**
+```
+GET /api/tasks/overdue?user_id={uuid}
+
+Response:
+{
+  "overdue_tasks": [
+    {
+      "task_id": "uuid",
+      "subject": "Physics",
+      "topic": "Newton's Laws",
+      "due_date": "2026-01-27",
+      "days_overdue": 1,
+      "priority": "high",
+      "status": "pending"
+    }
+  ],
+  "total_overdue": 3
 }
 ```
 
@@ -761,6 +869,7 @@ CREATE TABLE tasks (
     topic TEXT NOT NULL,
     duration_minutes INTEGER NOT NULL,
     start_time TEXT,
+    due_date DATE, -- Due date for the task
     priority TEXT CHECK(priority IN ('low', 'medium', 'high')),
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'in_progress', 'completed', 'skipped')),
     resources_json TEXT, -- JSON array
@@ -812,12 +921,30 @@ CREATE TABLE user_stats (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Reminders table
+CREATE TABLE reminders (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    reminder_time TIMESTAMP NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'sent', 'dismissed')),
+    notification_type TEXT CHECK(notification_type IN ('system', 'email', 'both')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance
 CREATE INDEX idx_tasks_plan_date ON tasks(plan_id, date);
 CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_due_date ON tasks(due_date);
 CREATE INDEX idx_tools_user_type ON tools(user_id, tool_type);
 CREATE INDEX idx_plans_user_date ON study_plans(user_id, start_date);
 CREATE INDEX idx_ai_conversations_user ON ai_conversations(user_id, created_at);
+CREATE INDEX idx_reminders_user_time ON reminders(user_id, reminder_time);
+CREATE INDEX idx_reminders_status ON reminders(status);
 ```
 
 ### File Storage Structure
@@ -1149,6 +1276,235 @@ const acceptChanges = async () => {
   setCurrentCode(previewCode);
   setShowPreview(false);
 };
+```
+
+---
+
+## Reminder and Due Date Tracking System
+
+### Overview
+The reminder system provides automated notifications for upcoming tasks and tracks due dates to help students stay on schedule. It integrates with the task management system to provide timely alerts and overdue task tracking.
+
+### Features
+- **Automatic Reminders**: Create reminders when tasks with due dates are generated
+- **Multiple Notification Types**: System notifications, email (optional), or both
+- **Overdue Tracking**: Automatically identify and flag overdue tasks
+- **Smart Scheduling**: AI-suggested reminder times based on task priority and duration
+- **Flexible Timing**: Set custom reminder times or use defaults (e.g., 1 hour before, 1 day before)
+
+### Reminder Creation Workflow
+
+```
+Task Created → Check Due Date → Auto-create Reminder → Schedule Notification
+         ↓
+   User Modifies → Update Reminder → Reschedule if needed
+```
+
+#### Default Reminder Rules
+- **High Priority Tasks**: 1 day before + 1 hour before due date
+- **Medium Priority Tasks**: 1 day before due date
+- **Low Priority Tasks**: 1 day before due date
+
+### Notification Service
+
+**Notification Types:**
+```rust
+pub enum NotificationType {
+    System,  // Desktop notification via Electron
+    Email,   // Email reminder (if configured)
+    Both,    // Both system and email
+}
+
+pub enum ReminderStatus {
+    Pending,    // Not yet sent
+    Sent,       // Successfully delivered
+    Dismissed,  // User dismissed the reminder
+}
+```
+
+**Reminder Scheduler:**
+```rust
+// reminder_service.rs
+pub struct ReminderService {
+    db: Arc<Database>,
+    scheduler: Arc<Scheduler>,
+}
+
+impl ReminderService {
+    // Check for pending reminders every minute
+    pub async fn run_scheduler(&self) {
+        loop {
+            let now = Utc::now();
+            let pending = self.get_pending_reminders(now).await?;
+            
+            for reminder in pending {
+                self.send_notification(&reminder).await?;
+                self.mark_as_sent(reminder.id).await?;
+            }
+            
+            sleep(Duration::from_secs(60)).await;
+        }
+    }
+    
+    // Create automatic reminders for new tasks
+    pub async fn create_auto_reminders(&self, task: &Task) -> Result<Vec<Reminder>> {
+        if let Some(due_date) = task.due_date {
+            let reminders = match task.priority {
+                Priority::High => vec![
+                    self.create_reminder(task, due_date - Duration::days(1))?,
+                    self.create_reminder(task, due_date - Duration::hours(1))?,
+                ],
+                Priority::Medium | Priority::Low => vec![
+                    self.create_reminder(task, due_date - Duration::days(1))?,
+                ],
+            };
+            
+            Ok(reminders)
+        } else {
+            Ok(vec![])
+        }
+    }
+    
+    // Get overdue tasks
+    pub async fn get_overdue_tasks(&self, user_id: &str) -> Result<Vec<Task>> {
+        let now = Utc::now().date();
+        self.db.get_tasks_before_date(user_id, now).await
+            .filter(|t| t.status != TaskStatus::Completed)
+    }
+}
+```
+
+### Due Date Management
+
+**Task Model with Due Date:**
+```rust
+pub struct Task {
+    pub id: String,
+    pub plan_id: String,
+    pub date: NaiveDate,          // Scheduled date
+    pub due_date: Option<NaiveDate>,  // Due date (optional)
+    pub subject: String,
+    pub topic: String,
+    pub duration_minutes: i32,
+    pub start_time: Option<String>,
+    pub priority: Priority,
+    pub status: TaskStatus,
+    // ... other fields
+}
+```
+
+**Due Date Tracking:**
+```rust
+// Track days until due
+pub fn days_until_due(&self) -> Option<i64> {
+    self.due_date.map(|due| {
+        let now = Utc::now().date().naive_utc();
+        (due - now).num_days()
+    })
+}
+
+// Check if overdue
+pub fn is_overdue(&self) -> bool {
+    if self.status == TaskStatus::Completed {
+        return false;
+    }
+    
+    self.due_date.map_or(false, |due| {
+        let now = Utc::now().date().naive_utc();
+        due < now
+    })
+}
+```
+
+### Frontend Integration
+
+**Reminder Component:**
+```typescript
+// components/Reminders/ReminderBadge.tsx
+interface ReminderBadgeProps {
+  upcomingCount: number;
+  overdueCount: number;
+}
+
+// Display in app bar showing count of upcoming/overdue
+```
+
+**Task Card with Due Date:**
+```typescript
+// components/StudyPlan/TaskCard.tsx
+interface TaskCardProps {
+  task: Task;
+  onComplete: () => void;
+  onUpdateDueDate: (date: Date) => void;
+}
+
+// Shows due date, days remaining, and overdue status
+// Color-coded: green (>3 days), yellow (1-3 days), red (overdue)
+```
+
+**Overdue Tasks View:**
+```typescript
+// components/StudyPlan/OverdueTasks.tsx
+// Lists all overdue tasks with:
+// - Subject and topic
+// - Original due date
+// - Days overdue
+// - Quick reschedule option
+```
+
+### Notification Display
+
+**Desktop Notification (Electron):**
+```typescript
+// electron/main.ts
+import { Notification } from 'electron';
+
+function showReminder(reminder: Reminder) {
+  new Notification({
+    title: `Reminder: ${reminder.task_subject}`,
+    body: reminder.message,
+    urgency: 'normal',
+    actions: [
+      { type: 'button', text: 'View Task' },
+      { type: 'button', text: 'Dismiss' }
+    ]
+  }).show();
+}
+```
+
+### API Integration Examples
+
+**Create task with due date:**
+```bash
+POST /api/plans/generate
+{
+  "user_id": "user-123",
+  "subjects": ["Mathematics"],
+  "goals": "Complete assignment by Friday",
+  "study_hours_per_day": 3,
+  "difficulty_level": "intermediate",
+  "start_date": "2026-02-01"
+}
+
+# AI automatically sets due dates based on goals
+```
+
+**Get overdue tasks:**
+```bash
+GET /api/tasks/overdue?user_id=user-123
+
+Response:
+{
+  "overdue_tasks": [
+    {
+      "task_id": "task-456",
+      "subject": "Physics",
+      "due_date": "2026-01-27",
+      "days_overdue": 1,
+      "priority": "high"
+    }
+  ]
+}
 ```
 
 ---
