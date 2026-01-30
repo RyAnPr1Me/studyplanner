@@ -40,7 +40,8 @@ cargo build
 cp .env.example .env
 # Edit .env and add your OpenAI API key (or configure local AI)
 
-# Initialize database
+# Initialize database (optional if using auto-create)
+mkdir -p data/database
 sqlite3 data/database/studyplanner.db < migrations/init.sql
 
 # Run backend
@@ -55,15 +56,24 @@ npm run dev
 npm run electron:dev
 ```
 
+### Backend Only
+
+```bash
+cd backend
+cargo run
+```
+
 ### Configuration
 
 Create a `.env` file in the `backend/` directory:
 
 ```bash
 # AI Provider Configuration
-AI_PROVIDER=openai  # or 'local'
-OPENAI_API_KEY=your-api-key-here
-OPENAI_MODEL=gpt-4
+AI_PROVIDER=openrouter  # or 'local'
+OPENROUTER_API_KEY=your-api-key-here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_REFERER=https://your-app-domain.example
 
 # Server Configuration
 SERVER_HOST=127.0.0.1
