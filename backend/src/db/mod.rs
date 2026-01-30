@@ -1,31 +1,38 @@
-use std::collections::HashMap;
+use rusqlite::Connection;
+use std::fs;
+use std::path::Path;
 use std::sync::Mutex;
 
-use uuid::Uuid;
-
-use crate::models::{plan::{DailyPlan, Plan, StoredTask}, reminder::Reminder, tool::Tool, user::UserProfile};
+use crate::utils::config::AppConfig;
 
 pub mod repository;
 pub mod schema;
 
 pub struct AppState {
-    pub plans: Mutex<HashMap<Uuid, Plan>>,
-    pub daily_plans: Mutex<HashMap<String, DailyPlan>>,
-    pub tasks: Mutex<HashMap<Uuid, StoredTask>>,
-    pub tools: Mutex<HashMap<Uuid, Tool>>,
-    pub reminders: Mutex<HashMap<Uuid, Reminder>>,
-    pub users: Mutex<HashMap<Uuid, UserProfile>>,
+    pub db: Mutex<Connection>,
+    pub config: AppConfig,
 }
 
 impl AppState {
-    pub fn new() -> Self {
-        Self {
-            plans: Mutex::new(HashMap::new()),
-            daily_plans: Mutex::new(HashMap::new()),
-            tasks: Mutex::new(HashMap::new()),
-            tools: Mutex::new(HashMap::new()),
-            reminders: Mutex::new(HashMap::new()),
-            users: Mutex::new(HashMap::new()),
+    pub fn new(config: AppConfig) -> Result<Self, rusqlite::Error> {
+        if config.database_path != ":memory:" {
+            if let Some(parent) = Path::new(&config.database_path).parent() {
+                if !parent.as_os_str().is_empty() {
+                    let _ = fs::create_dir_all(parent);
+                }
+            }
         }
+        let connection = Connection::open(&config.database_path)?;
+        schema::apply(&connection)?;
+        Ok(Self {
+            db: Mutex::new(connection),
+            config,
+        })
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new(AppConfig::for_test()).expect("default app state")
     }
 }

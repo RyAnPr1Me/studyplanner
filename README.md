@@ -40,7 +40,8 @@ cargo build
 cp .env.example .env
 # Edit .env and add your OpenAI API key (or configure local AI)
 
-# Initialize database
+# Initialize database (optional if using auto-create)
+mkdir -p data/database
 sqlite3 data/database/studyplanner.db < migrations/init.sql
 
 # Run backend

@@ -1,10 +1,11 @@
 use actix_web::{App, test, web};
 
 use backend::{AppState, api};
+use backend::utils::config::AppConfig;
 
 #[actix_web::test]
 async fn generate_plan_returns_plan() {
-    let state = web::Data::new(AppState::new());
+    let state = web::Data::new(AppState::new(AppConfig::for_test()).unwrap());
     let app = test::init_service(App::new().app_data(state.clone()).service(web::scope("/api").configure(api::configure))).await;
 
     let payload = serde_json::json!({
@@ -27,8 +28,34 @@ async fn generate_plan_returns_plan() {
 }
 
 #[actix_web::test]
+async fn daily_plan_returns_tasks() {
+    let state = web::Data::new(AppState::new(AppConfig::for_test()).unwrap());
+    let app = test::init_service(App::new().app_data(state.clone()).service(web::scope("/api").configure(api::configure))).await;
+
+    let payload = serde_json::json!({
+        "user_id": "00000000-0000-0000-0000-000000000003",
+        "subjects": ["Physics"],
+        "goals": "Basics",
+        "study_hours_per_day": 3,
+        "difficulty_level": "beginner",
+        "start_date": "2026-02-01"
+    });
+    let req = test::TestRequest::post()
+        .uri("/api/plans/generate")
+        .set_json(&payload)
+        .to_request();
+    let _: serde_json::Value = test::call_and_read_body_json(&app, req).await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/plans/daily/2026-02-01?user_id=00000000-0000-0000-0000-000000000003")
+        .to_request();
+    let resp: serde_json::Value = test::call_and_read_body_json(&app, req).await;
+    assert!(resp["data"]["tasks"].as_array().is_some());
+}
+
+#[actix_web::test]
 async fn generate_tool_returns_tool() {
-    let state = web::Data::new(AppState::new());
+    let state = web::Data::new(AppState::new(AppConfig::for_test()).unwrap());
     let app = test::init_service(App::new().app_data(state.clone()).service(web::scope("/api").configure(api::configure))).await;
 
     let payload = serde_json::json!({

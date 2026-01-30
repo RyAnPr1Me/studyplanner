@@ -14,6 +14,7 @@ pub struct ReminderCreateRequest {
 pub struct ReminderResponse {
     pub reminder_id: Uuid,
     pub task_id: Uuid,
+    pub user_id: Uuid,
     pub reminder_time: DateTime<Utc>,
     pub status: String,
     pub created_at: DateTime<Utc>,

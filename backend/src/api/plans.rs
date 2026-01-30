@@ -1,8 +1,9 @@
 use actix_web::{HttpResponse, Responder, web};
+use chrono::Datelike;
 use uuid::Uuid;
 
-use crate::db::AppState;
-use crate::models::plan::{DailyPlanResponse, PlanGenerateRequest, PlanResponse, RegenerateRequest, RegenerateResponse, SuggestedTool, TaskUpdateRequest, TaskUpdateResponse, parse_date};
+use crate::db::{AppState, repository};
+use crate::models::plan::{DailyPlan, DailyPlanResponse, PlanGenerateRequest, PlanResponse, RegenerateRequest, RegenerateResponse, SuggestedTool, TaskUpdateRequest, TaskUpdateResponse, parse_date};
 use crate::services::plan_service::PlanService;
 use crate::utils::{errors::ApiError, response::wrap};
 
@@ -34,25 +35,9 @@ async fn generate_plan(
         generated_at: plan.generated_at,
     };
 
-    state.plans.lock().expect("plans lock").insert(plan.plan_id, plan.clone());
-    let mut tasks = state.tasks.lock().expect("tasks lock");
-    for daily in &plan.weekly_plan.daily_plans {
-        for task in &daily.tasks {
-            tasks.insert(
-                task.id,
-                crate::models::plan::StoredTask {
-                    task: task.clone(),
-                    status: "pending".to_string(),
-                    actual_duration: None,
-                    notes: None,
-                    updated_at: plan.generated_at,
-                    user_id: plan.user_id,
-                    plan_date: daily.date.clone(),
-                },
-            );
-        }
-        state.daily_plans.lock().expect("daily lock").insert(daily.date.clone(), daily.clone());
-    }
+    let conn = state.db.lock().expect("db lock");
+    repository::insert_plan(&conn, &payload, &plan)
+        .map_err(|_| ApiError::new(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Failed to persist plan"))?;
 
     Ok(HttpResponse::Ok().json(wrap(response)))
 }
@@ -64,32 +49,18 @@ async fn get_daily_plan(
 ) -> Result<impl Responder, ApiError> {
     let date = path.into_inner();
     parse_date(&date).map_err(|_| ApiError::validation("Invalid date format"))?;
-
-    let daily = state.daily_plans.lock().expect("daily lock").get(&date).cloned();
-    let tasks = match daily {
-        Some(plan) => plan.tasks,
-        None => Vec::new(),
-    };
-
-    let completed_tasks = state
-        .tasks
-        .lock()
-        .expect("tasks lock")
-        .values()
-        .filter(|stored| stored.user_id == query.user_id && stored.plan_date == date && stored.status == "completed")
-        .map(|stored| stored.task.id)
-        .collect::<Vec<_>>();
-
-    let suggested_tools = state
-        .tools
-        .lock()
-        .expect("tools lock")
-        .values()
-        .filter(|tool| tool.user_id == query.user_id)
+    let conn = state.db.lock().expect("db lock");
+    let tasks = repository::get_daily_plan(&conn, query.user_id, &date)
+        .map_err(|_| ApiError::new(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Failed to load daily plan"))?;
+    let completed_tasks = repository::get_completed_tasks(&conn, query.user_id, &date)
+        .unwrap_or_default();
+    let suggested_tools = repository::list_tools(&conn, query.user_id, None)
+        .unwrap_or_default()
+        .into_iter()
         .map(|tool| SuggestedTool {
             tool_id: tool.tool_id,
-            tool_type: tool.tool_type.clone(),
-            subject: tool.name.clone(),
+            tool_type: tool.tool_type,
+            subject: tool.name,
         })
         .collect();
 
@@ -109,13 +80,9 @@ async fn update_task(
     payload: web::Json<TaskUpdateRequest>,
 ) -> Result<impl Responder, ApiError> {
     let task_id = path.into_inner();
-    let mut tasks = state.tasks.lock().expect("tasks lock");
-    let entry = tasks.get_mut(&task_id).ok_or_else(|| ApiError::not_found("Task not found"))?;
-    entry.status = payload.status.clone();
-    entry.actual_duration = payload.actual_duration;
-    entry.notes = payload.notes.clone();
-    entry.updated_at = chrono::Utc::now();
-
+    let conn = state.db.lock().expect("db lock");
+    let entry = repository::update_task(&conn, task_id, &payload.status, payload.actual_duration, payload.notes.clone())
+        .map_err(|_| ApiError::not_found("Task not found"))?;
     let response = TaskUpdateResponse {
         task_id,
         status: entry.status.clone(),
@@ -132,24 +99,22 @@ async fn regenerate_daily(
 ) -> Result<impl Responder, ApiError> {
     let date = path.into_inner();
     parse_date(&date).map_err(|_| ApiError::validation("Invalid date format"))?;
-    let daily = state.daily_plans.lock().expect("daily lock").get(&date).cloned();
-    let mut daily_plan = daily.unwrap_or_else(|| crate::models::plan::DailyPlan {
-        date: date.clone(),
-        day: "Monday".to_string(),
-        tasks: Vec::new(),
-        total_study_time: 0,
-        breaks: Vec::new(),
-    });
-
+    let conn = state.db.lock().expect("db lock");
+    let mut tasks = repository::get_daily_plan(&conn, payload.user_id, &date).unwrap_or_default();
     if !payload.keep_completed {
-        let tasks = state.tasks.lock().expect("tasks lock");
-        daily_plan.tasks.retain(|task| {
-            tasks
-                .get(&task.id)
-                .map(|stored| stored.status != "completed")
-                .unwrap_or(true)
-        });
+        let completed = repository::get_completed_tasks(&conn, payload.user_id, &date).unwrap_or_default();
+        tasks.retain(|task| !completed.contains(&task.id));
     }
+    let day = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+        .map(|parsed| parsed.weekday().to_string())
+        .unwrap_or_else(|_| "Monday".to_string());
+    let daily_plan = DailyPlan {
+        date: date.clone(),
+        day,
+        total_study_time: tasks.iter().map(|task| task.duration_minutes).sum(),
+        tasks,
+        breaks: vec!["11:00".to_string(), "15:00".to_string()],
+    };
 
     let response = RegenerateResponse {
         daily_plan,
@@ -164,30 +129,9 @@ async fn get_overdue_tasks(
     query: web::Query<DailyPlanQuery>,
 ) -> Result<impl Responder, ApiError> {
     let today = chrono::Utc::now().date_naive();
-    let tasks = state
-        .tasks
-        .lock()
-        .expect("tasks lock")
-        .values()
-        .filter(|stored| stored.user_id == query.user_id)
-        .filter_map(|stored| {
-            let due = chrono::NaiveDate::parse_from_str(&stored.task.due_date, "%Y-%m-%d").ok()?;
-            if due < today && stored.status != "completed" {
-                let days_overdue = (today - due).num_days();
-                Some(serde_json::json!({
-                    "task_id": stored.task.id,
-                    "subject": stored.task.subject,
-                    "topic": stored.task.topic,
-                    "due_date": stored.task.due_date,
-                    "days_overdue": days_overdue,
-                    "priority": stored.task.priority,
-                    "status": stored.status,
-                }))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+    let conn = state.db.lock().expect("db lock");
+    let tasks = repository::get_overdue_tasks(&conn, query.user_id, today)
+        .unwrap_or_default();
 
     let response = serde_json::json!({
         "overdue_tasks": tasks,

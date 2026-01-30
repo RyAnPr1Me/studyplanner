@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, Responder, web};
 use uuid::Uuid;
 
-use crate::db::AppState;
+use crate::db::{AppState, repository};
 use crate::models::tool::{
     ToolDeleteResponse, ToolDetailResponse, ToolEditRequest, ToolEditResponse, ToolGenerateRequest,
     ToolListQuery, ToolListResponse, ToolResponse,
@@ -20,7 +20,7 @@ async fn generate_tool(
     state: web::Data<AppState>,
     payload: web::Json<ToolGenerateRequest>,
 ) -> Result<impl Responder, ApiError> {
-    let tool = ToolService::generate_tool(&payload);
+    let tool = ToolService::generate_tool(&payload, &state.config);
     let response = ToolResponse {
         tool_id: tool.tool_id,
         tool_type: tool.tool_type.clone(),
@@ -30,7 +30,9 @@ async fn generate_tool(
         metadata: tool.metadata.clone(),
         preview_url: format!("/tools/preview/{}", tool.tool_id),
     };
-    state.tools.lock().expect("tools lock").insert(tool.tool_id, tool);
+    let conn = state.db.lock().expect("db lock");
+    repository::insert_tool(&conn, &tool)
+        .map_err(|_| ApiError::new(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Failed to store tool"))?;
 
     Ok(HttpResponse::Ok().json(wrap(response)))
 }
@@ -39,17 +41,14 @@ async fn list_tools(
     state: web::Data<AppState>,
     query: web::Query<ToolListQuery>,
 ) -> Result<impl Responder, ApiError> {
-    let mut tools = state
-        .tools
-        .lock()
-        .expect("tools lock")
-        .values()
-        .filter(|tool| tool.user_id == query.user_id)
-        .filter(|tool| query.tool_type.as_ref().map(|t| &tool.tool_type == t).unwrap_or(true))
+    let conn = state.db.lock().expect("db lock");
+    let mut tools = repository::list_tools(&conn, query.user_id, query.tool_type.as_deref())
+        .unwrap_or_default()
+        .into_iter()
         .map(|tool| crate::models::tool::ToolListItem {
             tool_id: tool.tool_id,
-            name: tool.name.clone(),
-            tool_type: tool.tool_type.clone(),
+            name: tool.name,
+            tool_type: tool.tool_type,
             usage_count: tool.usage_count,
             last_used: tool.last_used,
         })
@@ -79,12 +78,9 @@ async fn get_tool(
     path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let tool_id = path.into_inner();
-    let tool = state
-        .tools
-        .lock()
-        .expect("tools lock")
-        .get(&tool_id)
-        .cloned()
+    let conn = state.db.lock().expect("db lock");
+    let tool = repository::get_tool(&conn, tool_id)
+        .map_err(|_| ApiError::not_found("Tool not found"))?
         .ok_or_else(|| ApiError::not_found("Tool not found"))?;
 
     let response = ToolDetailResponse {
@@ -106,17 +102,20 @@ async fn edit_tool(
     payload: web::Json<ToolEditRequest>,
 ) -> Result<impl Responder, ApiError> {
     let tool_id = path.into_inner();
-    let mut tools = state.tools.lock().expect("tools lock");
-    let tool = tools.get_mut(&tool_id).ok_or_else(|| ApiError::not_found("Tool not found"))?;
+    let conn = state.db.lock().expect("db lock");
+    let tool = repository::get_tool(&conn, tool_id)
+        .map_err(|_| ApiError::not_found("Tool not found"))?
+        .ok_or_else(|| ApiError::not_found("Tool not found"))?;
     let updated_code = format!("{}\n// {}", tool.component_code, payload.edit_instruction);
-    tool.component_code = updated_code.clone();
-    tool.metadata.version = "1.1.0".to_string();
+    let version = "1.1.0".to_string();
+    repository::update_tool(&conn, tool_id, &updated_code, &version)
+        .map_err(|_| ApiError::new(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Failed to update tool"))?;
 
     let response = ToolEditResponse {
         tool_id,
         updated_component_code: updated_code,
         changes_summary: "Applied AI edits".to_string(),
-        version: tool.metadata.version.clone(),
+        version,
     };
 
     Ok(HttpResponse::Ok().json(wrap(response)))
@@ -127,9 +126,9 @@ async fn delete_tool(
     path: web::Path<Uuid>,
 ) -> Result<impl Responder, ApiError> {
     let tool_id = path.into_inner();
-    let mut tools = state.tools.lock().expect("tools lock");
-    let removed = tools.remove(&tool_id).is_some();
-
+    let conn = state.db.lock().expect("db lock");
+    let removed = repository::delete_tool(&conn, tool_id)
+        .map_err(|_| ApiError::new(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Failed to delete tool"))?;
     if !removed {
         return Err(ApiError::not_found("Tool not found"));
     }
