@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit'
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 import type { Tool } from '../../types/tool'
 
 interface ToolsState {
@@ -17,13 +17,13 @@ const toolSlice = createSlice({
   name: 'tools',
   initialState,
   reducers: {
-    setUserTools(state, action) {
+    setUserTools(state, action: PayloadAction<Tool[]>) {
       state.userTools = action.payload
     },
-    setActiveTools(state, action) {
+    setActiveTools(state, action: PayloadAction<Tool[]>) {
       state.activeTools = action.payload
     },
-    setCurrentTool(state, action) {
+    setCurrentTool(state, action: PayloadAction<Tool | null>) {
       state.currentTool = action.payload
     },
   },

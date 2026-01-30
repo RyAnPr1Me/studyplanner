@@ -4,8 +4,6 @@ import Loading from '../Common/Loading'
 interface ToolRendererProps {
   toolId: string
   code: string
-  editMode?: boolean
-  onUpdate?: (newCode: string) => void
 }
 
 const ToolRenderer = ({ toolId, code }: ToolRendererProps) => {

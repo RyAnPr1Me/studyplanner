@@ -4,7 +4,7 @@ import { Badge } from '@mui/material'
 export interface ReminderBadgeProps {
   upcomingCount: number
   overdueCount: number
-  children: ReactNode
+  children?: ReactNode
 }
 
 const ReminderBadge = ({ upcomingCount, overdueCount, children }: ReminderBadgeProps) => {

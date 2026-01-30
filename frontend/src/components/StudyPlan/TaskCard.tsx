@@ -7,7 +7,6 @@ import type { Task } from '../../types/plan'
 interface TaskCardProps {
   task: Task
   onComplete: () => void
-  onUpdateDueDate?: (date: Date) => void
 }
 
 const priorityColor: Record<string, 'default' | 'warning' | 'error' | 'success'> = {

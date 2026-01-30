@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit'
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 import type { UserProfile, UserStats } from '../../types/user'
 
 interface UserState {
@@ -17,13 +17,13 @@ const userSlice = createSlice({
   name: 'user',
   initialState,
   reducers: {
-    setProfile(state, action) {
+    setProfile(state, action: PayloadAction<UserProfile | null>) {
       state.profile = action.payload
     },
-    setPreferences(state, action) {
+    setPreferences(state, action: PayloadAction<Record<string, unknown>>) {
       state.preferences = action.payload
     },
-    setStats(state, action) {
+    setStats(state, action: PayloadAction<UserStats | null>) {
       state.stats = action.payload
     },
   },
