@@ -8,11 +8,11 @@ pub struct AiService;
 
 impl AiService {
     pub async fn chat(request: &AiChatRequest, config: &AppConfig) -> AiChatResponse {
-        if config.ai_provider == "openai" {
-            if let Some(api_key) = &config.openai_api_key {
+        if config.ai_provider == "openrouter" {
+            if let Some(api_key) = &config.openrouter_api_key {
                 if !api_key.trim().is_empty() {
-                    if let Some(response) = Self::call_openai(request, config, api_key).await {
-                    return response;
+                    if let Some(response) = Self::call_openrouter(request, config, api_key).await {
+                        return response;
                     }
                 }
             }
@@ -38,25 +38,26 @@ impl AiService {
         }
     }
 
-    async fn call_openai(request: &AiChatRequest, config: &AppConfig, api_key: &str) -> Option<AiChatResponse> {
-        if config.openai_model.trim().is_empty() {
+    async fn call_openrouter(request: &AiChatRequest, config: &AppConfig, api_key: &str) -> Option<AiChatResponse> {
+        if config.openrouter_model.trim().is_empty() {
             return None;
         }
         let client = Client::new();
         let payload = serde_json::json!({
-            "model": config.openai_model,
+            "model": config.openrouter_model,
             "messages": [
                 {"role": "system", "content": "You are a helpful study planner assistant."},
                 {"role": "user", "content": request.message}
             ],
         });
-        let response = client
-            .post("https://api.openai.com/v1/chat/completions")
+        let mut request_builder = client
+            .post(format!("{}/chat/completions", config.openrouter_base_url.trim_end_matches('/')))
             .bearer_auth(api_key)
-            .json(&payload)
-            .send()
-            .await
-            .ok()?;
+            .header("X-Title", "AI Study Planner");
+        if let Some(referer) = &config.openrouter_referer {
+            request_builder = request_builder.header("HTTP-Referer", referer);
+        }
+        let response = request_builder.json(&payload).send().await.ok()?;
         let body: serde_json::Value = response.json().await.ok()?;
         let reply = body
             .get("choices")

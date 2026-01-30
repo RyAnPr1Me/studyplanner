@@ -69,9 +69,11 @@ Create a `.env` file in the `backend/` directory:
 
 ```bash
 # AI Provider Configuration
-AI_PROVIDER=openai  # or 'local'
-OPENAI_API_KEY=your-api-key-here
-OPENAI_MODEL=gpt-4
+AI_PROVIDER=openrouter  # or 'local'
+OPENROUTER_API_KEY=your-api-key-here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_REFERER=https://your-app-domain.example
 
 # Server Configuration
 SERVER_HOST=127.0.0.1

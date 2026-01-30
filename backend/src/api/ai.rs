@@ -14,7 +14,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
 
 async fn chat(state: web::Data<AppState>, payload: web::Json<AiChatRequest>) -> Result<impl Responder, ApiError> {
     let response = AiService::chat(&payload, &state.config).await;
-    if state.config.ai_provider == "openai" {
+    if state.config.ai_provider == "openrouter" {
         let conn = state.db.lock().expect("db lock");
         repository::insert_conversation(&conn, &payload, &response.response)
             .map_err(|_| ApiError::new(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Failed to store conversation"))?;
