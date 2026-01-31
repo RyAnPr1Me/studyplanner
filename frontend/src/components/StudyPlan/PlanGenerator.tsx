@@ -1,20 +1,36 @@
-import { Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useState } from 'react'
+import type { PlanGenerateRequest } from '../../types/plan'
+import { useStudyPlan } from '../../hooks/useStudyPlan'
+import { getUserId } from '../../utils/user'
 
-interface PlanGeneratorProps {
-  onGenerate: (payload: Record<string, unknown>) => void
-}
-
-const PlanGenerator = ({ onGenerate }: PlanGeneratorProps) => {
+const PlanGenerator = () => {
+  const { generatePlan, loading, error } = useStudyPlan()
   const [subjects, setSubjects] = useState('Mathematics, Physics')
   const [goals, setGoals] = useState('Prepare for final exams')
   const [hours, setHours] = useState(4)
   const [difficulty, setDifficulty] = useState('intermediate')
   const [startDate, setStartDate] = useState('2026-02-01')
 
+  const handleGenerate = async () => {
+    const payload: PlanGenerateRequest = {
+      user_id: getUserId(),
+      subjects: subjects
+        .split(',')
+        .map((subject) => subject.trim())
+        .filter(Boolean),
+      goals,
+      study_hours_per_day: hours,
+      difficulty_level: difficulty,
+      start_date: startDate,
+    }
+    await generatePlan(payload)
+  }
+
   return (
     <Stack spacing={2}>
       <Typography variant="h5">Generate Weekly Plan</Typography>
+      {error && <Alert severity="error">{error}</Alert>}
       <TextField
         label="Subjects (comma separated)"
         value={subjects}
@@ -46,20 +62,8 @@ const PlanGenerator = ({ onGenerate }: PlanGeneratorProps) => {
           InputLabelProps={{ shrink: true }}
         />
       </Box>
-      <Button
-        variant="contained"
-        onClick={() =>
-          onGenerate({
-            user_id: 'demo-user',
-            subjects: subjects.split(',').map((subject) => subject.trim()).filter(Boolean),
-            goals,
-            study_hours_per_day: hours,
-            difficulty_level: difficulty,
-            start_date: startDate,
-          })
-        }
-      >
-        Generate Plan
+      <Button variant="contained" onClick={handleGenerate} disabled={loading}>
+        {loading ? 'Generating...' : 'Generate Plan'}
       </Button>
     </Stack>
   )

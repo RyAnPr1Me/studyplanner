@@ -4,10 +4,11 @@ import TaskCard from './TaskCard'
 
 interface WeeklyViewProps {
   plan: WeeklyPlan
+  completedTasks?: string[]
   onTaskComplete: (taskId: string) => void
 }
 
-const WeeklyView = ({ plan, onTaskComplete }: WeeklyViewProps) => (
+const WeeklyView = ({ plan, completedTasks = [], onTaskComplete }: WeeklyViewProps) => (
   <Stack spacing={3}>
     <Box>
       <Typography variant="h4">Week of {plan.week_start}</Typography>
@@ -18,7 +19,7 @@ const WeeklyView = ({ plan, onTaskComplete }: WeeklyViewProps) => (
     {plan.daily_plans.map((daily) => (
       <Box key={daily.date}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          {daily.date}
+          {daily.day ?? daily.date}
         </Typography>
         <Stack spacing={2}>
           {daily.tasks.length === 0 ? (
@@ -27,7 +28,12 @@ const WeeklyView = ({ plan, onTaskComplete }: WeeklyViewProps) => (
             </Typography>
           ) : (
             daily.tasks.map((task) => (
-              <TaskCard key={task.id} task={task} onComplete={() => onTaskComplete(task.id)} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                completed={completedTasks.includes(task.id)}
+                onComplete={() => onTaskComplete(task.id)}
+              />
             ))
           )}
         </Stack>

@@ -1,12 +1,13 @@
-import { Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
-import type { Tool } from '../../types/tool'
+import { Box, Button, Card, CardActionArea, CardContent, Stack, Typography } from '@mui/material'
+import type { ToolListItem } from '../../types/tool'
 
 interface ToolGalleryProps {
-  tools: Tool[]
+  tools: ToolListItem[]
+  onSelect: (toolId: string) => void
   onCreate: () => void
 }
 
-const ToolGallery = ({ tools, onCreate }: ToolGalleryProps) => (
+const ToolGallery = ({ tools, onSelect, onCreate }: ToolGalleryProps) => (
   <Stack spacing={2}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <Typography variant="h5">Your Tools</Typography>
@@ -17,12 +18,14 @@ const ToolGallery = ({ tools, onCreate }: ToolGalleryProps) => (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 2 }}>
       {tools.map((tool) => (
         <Card key={tool.tool_id} elevation={2}>
-          <CardContent>
-            <Typography variant="h6">{tool.name}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {tool.description ?? 'No description'}
-            </Typography>
-          </CardContent>
+          <CardActionArea onClick={() => onSelect(tool.tool_id)}>
+            <CardContent>
+              <Typography variant="h6">{tool.name}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {tool.tool_type}
+              </Typography>
+            </CardContent>
+          </CardActionArea>
         </Card>
       ))}
     </Box>

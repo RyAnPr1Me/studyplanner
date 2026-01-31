@@ -1,11 +1,47 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { Alert, Box, Stack, Typography } from '@mui/material'
+import { useCallback, useEffect, useState } from 'react'
 import PlanGenerator from '../components/StudyPlan/PlanGenerator'
 import OverdueTasks from '../components/StudyPlan/OverdueTasks'
 import AIAssistant from '../components/AI/AIAssistant'
 import type { Task } from '../types/plan'
+import { fetchOverdueTasks, updateTask } from '../store/api/planApi'
+import { getUserId } from '../utils/user'
+import { fetchUpcomingReminders } from '../store/api/reminderApi'
+import { mapOverdueTask } from '../utils/taskMapper'
 
 const Dashboard = () => {
-  const overdueTasks: Task[] = []
+  const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
+  const [overdueError, setOverdueError] = useState<string | null>(null)
+  const [reminderCount, setReminderCount] = useState(0)
+  const [reminderError, setReminderError] = useState<string | null>(null)
+
+  const loadOverdue = useCallback(async () => {
+    try {
+      const response = await fetchOverdueTasks(getUserId())
+      setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
+    } catch (err) {
+      setOverdueError(err instanceof Error ? err.message : 'Failed to load overdue tasks')
+    }
+  }, [])
+
+  useEffect(() => {
+    const loadReminders = async () => {
+      try {
+        const response = await fetchUpcomingReminders(getUserId())
+        setReminderCount(response.upcoming_reminders.length)
+      } catch (err) {
+        setReminderError(err instanceof Error ? err.message : 'Failed to load reminders')
+      }
+    }
+
+    void loadOverdue()
+    void loadReminders()
+  }, [loadOverdue])
+
+  const handleComplete = async (taskId: string) => {
+    await updateTask(taskId, { status: 'completed' })
+    await loadOverdue()
+  }
 
   return (
     <Stack spacing={3}>
@@ -13,6 +49,10 @@ const Dashboard = () => {
         <Typography variant="h4">Welcome back, Student</Typography>
         <Typography variant="body1" color="text.secondary">
           Here is your AI-powered study overview.
+        </Typography>
+        {reminderError && <Alert severity="error">{reminderError}</Alert>}
+        <Typography variant="body2" color="text.secondary">
+          Upcoming reminders: {reminderCount}
         </Typography>
       </Box>
       <Box
@@ -22,8 +62,8 @@ const Dashboard = () => {
           gap: 3,
         }}
       >
-        <PlanGenerator onGenerate={() => undefined} />
-        <OverdueTasks tasks={overdueTasks} />
+        <PlanGenerator />
+        <OverdueTasks tasks={overdueTasks} error={overdueError} onComplete={handleComplete} />
       </Box>
       <AIAssistant position="sidebar" />
     </Stack>

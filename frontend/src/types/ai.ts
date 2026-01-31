@@ -1,10 +1,16 @@
-export interface AIMessage {
-  response?: string
-  message?: string
-  suggested_actions?: Array<{ type: string; description: string }>
-  conversation_id?: string
+export interface AIAction {
+  action_type: string
+  description: string
+  action_data?: Record<string, unknown>
 }
 
-export interface AISuggestion {
-  text: string
+export interface AIMessage {
+  response: string
+  suggested_actions: AIAction[]
+  conversation_id: string
+}
+
+export interface AISuggestionResponse {
+  suggestions: string[]
+  priority: string
 }

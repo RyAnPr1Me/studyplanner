@@ -1,15 +1,15 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { AIMessage, AISuggestion } from '../../types/ai'
+import type { AIMessage, AISuggestionResponse } from '../../types/ai'
 
 interface AIState {
   chatHistory: AIMessage[]
-  suggestions: AISuggestion[]
+  suggestions: AISuggestionResponse | null
   isProcessing: boolean
 }
 
 const initialState: AIState = {
   chatHistory: [],
-  suggestions: [],
+  suggestions: null,
   isProcessing: false,
 }
 
@@ -23,7 +23,7 @@ const aiSlice = createSlice({
     addMessage(state, action: PayloadAction<AIMessage>) {
       state.chatHistory.push(action.payload)
     },
-    setSuggestions(state, action: PayloadAction<AISuggestion[]>) {
+    setSuggestions(state, action: PayloadAction<AISuggestionResponse | null>) {
       state.suggestions = action.payload
     },
     setProcessing(state, action: PayloadAction<boolean>) {
