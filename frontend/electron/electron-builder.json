@@ -1,0 +1,12 @@
+{
+  "appId": "com.studyplanner.app",
+  "productName": "AI Study Planner",
+  "files": [
+    "dist",
+    "electron"
+  ],
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Education"
+  }
+}
