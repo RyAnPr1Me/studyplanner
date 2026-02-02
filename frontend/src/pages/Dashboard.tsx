@@ -1,5 +1,5 @@
 import { Alert, Box, Stack, Typography } from '@mui/material'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import PlanGenerator from '../components/StudyPlan/PlanGenerator'
 import OverdueTasks from '../components/StudyPlan/OverdueTasks'
 import AIAssistant from '../components/AI/AIAssistant'
@@ -15,21 +15,21 @@ const Dashboard = () => {
   const [reminderCount, setReminderCount] = useState(0)
   const [reminderError, setReminderError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let active = true
-
-    const loadOverdue = async () => {
-      try {
-        const response = await fetchOverdueTasks(getUserId())
-        if (active) {
-          setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
-        }
-      } catch (err) {
-        if (active) {
-          setOverdueError(err instanceof Error ? err.message : 'Failed to load overdue tasks')
-        }
+  const loadOverdue = useCallback(async (active = true) => {
+    try {
+      const response = await fetchOverdueTasks(getUserId())
+      if (active) {
+        setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
+      }
+    } catch (err) {
+      if (active) {
+        setOverdueError(err instanceof Error ? err.message : 'Failed to load overdue tasks')
       }
     }
+  }, [])
+
+  useEffect(() => {
+    let active = true
 
     const loadReminders = async () => {
       try {
@@ -44,18 +44,21 @@ const Dashboard = () => {
       }
     }
 
-    void loadOverdue()
+    void loadOverdue(active)
     void loadReminders()
 
     return () => {
       active = false
     }
-  }, [])
+  }, [loadOverdue])
 
   const handleComplete = async (taskId: string) => {
-    await updateTask(taskId, { status: 'completed' })
-    const response = await fetchOverdueTasks(getUserId())
-    setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
+    try {
+      await updateTask(taskId, { status: 'completed' })
+      await loadOverdue()
+    } catch (err) {
+      setOverdueError(err instanceof Error ? err.message : 'Failed to update task')
+    }
   }
 
   return (
