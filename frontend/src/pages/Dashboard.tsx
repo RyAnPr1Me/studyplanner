@@ -1,5 +1,5 @@
 import { Alert, Box, Stack, Typography } from '@mui/material'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import PlanGenerator from '../components/StudyPlan/PlanGenerator'
 import OverdueTasks from '../components/StudyPlan/OverdueTasks'
 import AIAssistant from '../components/AI/AIAssistant'
@@ -15,32 +15,47 @@ const Dashboard = () => {
   const [reminderCount, setReminderCount] = useState(0)
   const [reminderError, setReminderError] = useState<string | null>(null)
 
-  const loadOverdue = useCallback(async () => {
-    try {
-      const response = await fetchOverdueTasks(getUserId())
-      setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
-    } catch (err) {
-      setOverdueError(err instanceof Error ? err.message : 'Failed to load overdue tasks')
-    }
-  }, [])
-
   useEffect(() => {
+    let active = true
+
+    const loadOverdue = async () => {
+      try {
+        const response = await fetchOverdueTasks(getUserId())
+        if (active) {
+          setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
+        }
+      } catch (err) {
+        if (active) {
+          setOverdueError(err instanceof Error ? err.message : 'Failed to load overdue tasks')
+        }
+      }
+    }
+
     const loadReminders = async () => {
       try {
         const response = await fetchUpcomingReminders(getUserId())
-        setReminderCount(response.upcoming_reminders.length)
+        if (active) {
+          setReminderCount(response.upcoming_reminders.length)
+        }
       } catch (err) {
-        setReminderError(err instanceof Error ? err.message : 'Failed to load reminders')
+        if (active) {
+          setReminderError(err instanceof Error ? err.message : 'Failed to load reminders')
+        }
       }
     }
 
     void loadOverdue()
     void loadReminders()
-  }, [loadOverdue])
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleComplete = async (taskId: string) => {
     await updateTask(taskId, { status: 'completed' })
-    await loadOverdue()
+    const response = await fetchOverdueTasks(getUserId())
+    setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
   }
 
   return (
