@@ -6,8 +6,13 @@ import DailyPlanPage from './pages/DailyPlan'
 import ToolsPage from './pages/ToolsPage'
 import Settings from './pages/Settings'
 
-const App = () => (
-  <Layout>
+interface AppProps {
+  mode: 'light' | 'dark'
+  onToggleMode: () => void
+}
+
+const App = ({ mode, onToggleMode }: AppProps) => (
+  <Layout mode={mode} onToggleMode={onToggleMode}>
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/weekly" element={<WeeklyPlanPage />} />

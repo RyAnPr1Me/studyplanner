@@ -19,7 +19,16 @@ const ChatInterface = () => {
   return (
     <Stack spacing={2}>
       {error && <Alert severity="error">{error}</Alert>}
-      <Box sx={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #e8eaed', borderRadius: 2, p: 2 }}>
+      <Box
+        sx={{
+          maxHeight: 200,
+          overflowY: 'auto',
+          border: '1px solid rgba(138,180,248,0.2)',
+          borderRadius: 2,
+          p: 2,
+          backgroundColor: 'rgba(15,17,21,0.8)',
+        }}
+      >
         {messages.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
             Ask the AI for study guidance or tool ideas.

@@ -14,13 +14,17 @@ const navItems = [
   { label: 'Settings', to: '/settings', icon: <SettingsIcon /> },
 ]
 
-const Sidebar = () => {
+interface SidebarProps {
+  mode: 'light' | 'dark'
+}
+
+const Sidebar = ({ mode }: SidebarProps) => {
   const location = useLocation()
 
   return (
     <>
       <Toolbar />
-      <Divider />
+      <Divider sx={{ borderColor: mode === 'dark' ? 'rgba(138,180,248,0.15)' : '#e8eaed' }} />
       <List>
         {navItems.map((item) => (
           <ListItemButton
@@ -29,16 +33,21 @@ const Sidebar = () => {
             to={item.to}
             selected={location.pathname === item.to}
             sx={{
+              borderRadius: 2,
+              mx: 1,
               '&.Mui-selected': {
-                backgroundColor: '#e8f0fe',
-                color: '#1a73e8',
+                backgroundColor: mode === 'dark' ? 'rgba(138,180,248,0.18)' : '#e8f0fe',
+                color: mode === 'dark' ? '#e8eaed' : '#1a73e8',
               },
               '&.Mui-selected .MuiListItemIcon-root': {
-                color: '#1a73e8',
+                color: mode === 'dark' ? '#8ab4f8' : '#1a73e8',
+              },
+              '&:hover': {
+                backgroundColor: mode === 'dark' ? 'rgba(138,180,248,0.08)' : '#f1f3f4',
               },
             }}
           >
-            <ListItemIcon>{item.icon}</ListItemIcon>
+            <ListItemIcon sx={{ color: mode === 'dark' ? '#9aa0a6' : '#5f6368' }}>{item.icon}</ListItemIcon>
             <ListItemText primary={item.label} />
           </ListItemButton>
         ))}
