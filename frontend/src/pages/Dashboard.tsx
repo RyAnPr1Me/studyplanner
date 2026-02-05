@@ -9,6 +9,7 @@ import { getUserId } from '../utils/user'
 import { fetchUpcomingReminders } from '../store/api/reminderApi'
 import { mapOverdueTask } from '../utils/taskMapper'
 import { useStudyPlan } from '../hooks/useStudyPlan'
+import type { PlanGenerateInput } from '../types/plan'
 
 const Dashboard = () => {
   const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
@@ -46,7 +47,7 @@ const Dashboard = () => {
     setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
   }
 
-  const handleGenerate = async (payload: Parameters<typeof generatePlan>[0]) => {
+  const handleGenerate = async (payload: PlanGenerateInput) => {
     await generatePlan({ ...payload, user_id: getUserId() })
   }
 

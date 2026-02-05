@@ -56,6 +56,8 @@ export interface PlanGenerateRequest {
   start_date: string
 }
 
+export type PlanGenerateInput = Omit<PlanGenerateRequest, 'user_id'>
+
 export interface TaskUpdateRequest {
   status: string
   actual_duration?: number

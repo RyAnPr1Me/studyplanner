@@ -4,7 +4,7 @@ import WeeklyView from '../components/StudyPlan/WeeklyView'
 import { useStudyPlan } from '../hooks/useStudyPlan'
 import { getUserId } from '../utils/user'
 import PlanGenerator from '../components/StudyPlan/PlanGenerator'
-import type { PlanGenerateRequest } from '../types/plan'
+import type { PlanGenerateInput } from '../types/plan'
 
 const WeeklyPlanPage = () => {
   const { weeklyPlan, dailyPlan, loading, error, generatePlan, updateTaskStatus, loadDailyPlan } = useStudyPlan()
@@ -44,7 +44,7 @@ const WeeklyPlanPage = () => {
     })
   }
 
-  const handleGenerate = async (payload: PlanGenerateRequest) => {
+  const handleGenerate = async (payload: PlanGenerateInput) => {
     await generatePlan({ ...payload, user_id: getUserId() })
   }
 

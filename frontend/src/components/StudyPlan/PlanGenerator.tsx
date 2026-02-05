@@ -1,9 +1,9 @@
 import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useMemo, useState } from 'react'
-import type { PlanGenerateRequest } from '../../types/plan'
+import type { PlanGenerateInput } from '../../types/plan'
 
 interface PlanGeneratorProps {
-  onGenerate: (payload: PlanGenerateRequest) => Promise<void>
+  onGenerate: (payload: PlanGenerateInput) => Promise<void>
   loading?: boolean
   error?: string | null
   initialSubjects?: string
@@ -33,8 +33,7 @@ const PlanGenerator = ({
   const canGenerate = subjects.trim().length > 0 && goals.trim().length > 0 && hours > 0
 
   const handleGenerate = async () => {
-    const payload: PlanGenerateRequest = {
-      user_id: '',
+    const payload: PlanGenerateInput = {
       subjects: subjects
         .split(',')
         .map((subject) => subject.trim())
