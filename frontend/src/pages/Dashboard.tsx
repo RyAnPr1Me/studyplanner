@@ -8,12 +8,14 @@ import { fetchOverdueTasks, updateTask } from '../store/api/planApi'
 import { getUserId } from '../utils/user'
 import { fetchUpcomingReminders } from '../store/api/reminderApi'
 import { mapOverdueTask } from '../utils/taskMapper'
+import { useStudyPlan } from '../hooks/useStudyPlan'
 
 const Dashboard = () => {
   const [overdueTasks, setOverdueTasks] = useState<Task[]>([])
   const [overdueError, setOverdueError] = useState<string | null>(null)
   const [reminderCount, setReminderCount] = useState(0)
   const [reminderError, setReminderError] = useState<string | null>(null)
+  const { generatePlan, loading: planLoading, error: planError } = useStudyPlan()
 
   useEffect(() => {
     const loadOverdue = async () => {
@@ -44,6 +46,10 @@ const Dashboard = () => {
     setOverdueTasks(response.overdue_tasks.map(mapOverdueTask))
   }
 
+  const handleGenerate = async (payload: Parameters<typeof generatePlan>[0]) => {
+    await generatePlan({ ...payload, user_id: getUserId() })
+  }
+
   return (
     <Stack spacing={3}>
       <Box>
@@ -63,7 +69,7 @@ const Dashboard = () => {
           gap: 3,
         }}
       >
-        <PlanGenerator />
+        <PlanGenerator onGenerate={handleGenerate} loading={planLoading} error={planError} />
         <OverdueTasks tasks={overdueTasks} error={overdueError} onComplete={handleComplete} />
       </Box>
       <AIAssistant position="sidebar" />

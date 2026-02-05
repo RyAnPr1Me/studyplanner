@@ -3,13 +3,31 @@ import { useEffect, useState } from 'react'
 import { fetchStats, upsertProfile } from '../store/api/userApi'
 import { getUserId } from '../utils/user'
 
+const SETTINGS_KEY = 'studyplanner.settings'
+
 const Settings = () => {
-  const [name, setName] = useState('Student')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [studyHours, setStudyHours] = useState(4)
+  const [studyHours, setStudyHours] = useState(1)
   const [remindersEnabled, setRemindersEnabled] = useState(true)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [stats, setStats] = useState<{ total_study_hours: number; completed_tasks: number } | null>(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem(SETTINGS_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored) as {
+        name?: string
+        email?: string
+        studyHours?: number
+        remindersEnabled?: boolean
+      }
+      setName(parsed.name ?? '')
+      setEmail(parsed.email ?? '')
+      setStudyHours(parsed.studyHours ?? 1)
+      setRemindersEnabled(parsed.remindersEnabled ?? true)
+    }
+  }, [])
 
   useEffect(() => {
     const loadStats = async () => {
@@ -33,6 +51,10 @@ const Settings = () => {
           reminders_enabled: remindersEnabled,
         },
       })
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({ name, email, studyHours, remindersEnabled }),
+      )
       setStatusMessage('Profile saved successfully.')
     } catch {
       setStatusMessage('Failed to save profile.')
@@ -59,7 +81,7 @@ const Settings = () => {
               <Typography>Enable reminders</Typography>
               <Switch checked={remindersEnabled} onChange={(event) => setRemindersEnabled(event.target.checked)} />
             </Stack>
-            <Button variant="contained" onClick={handleSave}>
+            <Button variant="contained" onClick={handleSave} disabled={!name.trim()}>
               Save Preferences
             </Button>
           </Stack>

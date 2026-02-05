@@ -1,20 +1,40 @@
 import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { PlanGenerateRequest } from '../../types/plan'
-import { useStudyPlan } from '../../hooks/useStudyPlan'
-import { getUserId } from '../../utils/user'
 
-const PlanGenerator = () => {
-  const { generatePlan, loading, error } = useStudyPlan()
-  const [subjects, setSubjects] = useState('Mathematics, Physics')
-  const [goals, setGoals] = useState('Prepare for final exams')
-  const [hours, setHours] = useState(4)
-  const [difficulty, setDifficulty] = useState('intermediate')
-  const [startDate, setStartDate] = useState('2026-02-01')
+interface PlanGeneratorProps {
+  onGenerate: (payload: PlanGenerateRequest) => Promise<void>
+  loading?: boolean
+  error?: string | null
+  initialSubjects?: string
+  initialGoals?: string
+  initialHours?: number
+  initialDifficulty?: string
+  initialStartDate?: string
+}
+
+const PlanGenerator = ({
+  onGenerate,
+  loading = false,
+  error,
+  initialSubjects = '',
+  initialGoals = '',
+  initialHours = 2,
+  initialDifficulty = 'intermediate',
+  initialStartDate,
+}: PlanGeneratorProps) => {
+  const defaultStart = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const [subjects, setSubjects] = useState(initialSubjects)
+  const [goals, setGoals] = useState(initialGoals)
+  const [hours, setHours] = useState(initialHours)
+  const [difficulty, setDifficulty] = useState(initialDifficulty)
+  const [startDate, setStartDate] = useState(initialStartDate ?? defaultStart)
+
+  const canGenerate = subjects.trim().length > 0 && goals.trim().length > 0 && hours > 0
 
   const handleGenerate = async () => {
     const payload: PlanGenerateRequest = {
-      user_id: getUserId(),
+      user_id: '',
       subjects: subjects
         .split(',')
         .map((subject) => subject.trim())
@@ -24,7 +44,7 @@ const PlanGenerator = () => {
       difficulty_level: difficulty,
       start_date: startDate,
     }
-    await generatePlan(payload)
+    await onGenerate(payload)
   }
 
   return (
@@ -62,7 +82,7 @@ const PlanGenerator = () => {
           InputLabelProps={{ shrink: true }}
         />
       </Box>
-      <Button variant="contained" onClick={handleGenerate} disabled={loading}>
+      <Button variant="contained" onClick={handleGenerate} disabled={loading || !canGenerate}>
         {loading ? 'Generating...' : 'Generate Plan'}
       </Button>
     </Stack>

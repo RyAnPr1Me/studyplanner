@@ -1,4 +1,4 @@
-import { Alert, Button, Divider, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Button, Divider, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
 import ToolEditor from '../components/Tools/ToolEditor'
 import ToolGallery from '../components/Tools/ToolGallery'
@@ -10,8 +10,8 @@ import type { ToolGenerateRequest } from '../types/tool'
 const ToolsPage = () => {
   const { tools, currentTool, loading, error, loadTools, loadTool, createTool, applyEdit } = useDynamicTool()
   const [toolType, setToolType] = useState('calculator')
-  const [context, setContext] = useState('Quadratic equations')
-  const [requirements, setRequirements] = useState('Calculator for solving quadratic equations with step-by-step solution')
+  const [context, setContext] = useState('')
+  const [requirements, setRequirements] = useState('')
 
   useEffect(() => {
     void loadTools(getUserId())
@@ -42,6 +42,8 @@ const ToolsPage = () => {
     await applyEdit(currentTool.tool_id, instruction)
   }
 
+  const canCreate = context.trim().length > 0 && requirements.trim().length > 0
+
   return (
     <Stack spacing={3}>
       <Typography variant="h4">Tools</Typography>
@@ -50,11 +52,17 @@ const ToolsPage = () => {
         <Typography variant="h6">Create Tool</Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
           <TextField
+            select
             label="Tool type"
             value={toolType}
             onChange={(event) => setToolType(event.target.value)}
             fullWidth
-          />
+          >
+            <MenuItem value="calculator">Calculator</MenuItem>
+            <MenuItem value="timer">Timer</MenuItem>
+            <MenuItem value="flashcard">Flashcard</MenuItem>
+            <MenuItem value="custom">Custom</MenuItem>
+          </TextField>
           <TextField label="Context" value={context} onChange={(event) => setContext(event.target.value)} fullWidth />
         </Stack>
         <TextField
@@ -64,7 +72,7 @@ const ToolsPage = () => {
           multiline
           minRows={2}
         />
-        <Button variant="contained" onClick={handleCreate} disabled={loading}>
+        <Button variant="contained" onClick={handleCreate} disabled={loading || !canCreate}>
           {loading ? 'Creating...' : 'Generate Tool'}
         </Button>
       </Stack>
